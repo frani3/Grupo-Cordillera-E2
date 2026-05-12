@@ -3,14 +3,17 @@ package com.evaluacion.orq.controller;
 import com.evaluacion.orq.model.DataResponse;
 import com.evaluacion.orq.strategy.ProcessingContext;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
-// PATRÓN STRATEGY: Justificación técnica para evaluación parcial 2
-// El controlador actúa como cliente del Context.
-// Delega la elección del algoritmo al ProcessingContext,
-// desacoplando la lógica HTTP de los algoritmos concretos.
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+// PATRÓN STRATEGY: el controlador delega el algoritmo al ProcessingContext.
 @RestController
 @RequestMapping("/api")
 public class OrqController {
@@ -35,10 +38,9 @@ public class OrqController {
         try {
             processingContext.setStrategy(strategy);
 
-            // Obtiene datos crudos del data-ms (modelo PULL)
-            String rawData = fetchFromDataMs();
+            List<Map<String, Object>> transactions = fetchFromDataMs();
+            String result = processingContext.executeStrategy(requestId, transactions);
 
-            String result = processingContext.executeStrategy(requestId, rawData);
             return ResponseEntity.ok(DataResponse.ok(result, "orq-service"));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(DataResponse.error(e.getMessage()));
@@ -60,13 +62,19 @@ public class OrqController {
         return ResponseEntity.ok(DataResponse.ok("orq-service operativo", "orq-service"));
     }
 
-    private String fetchFromDataMs() {
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> fetchFromDataMs() {
         try {
-            Object[] transactions = restTemplate.getForObject(
-                    dataMsUrl + "/api/pos/data", Object[].class);
-            return transactions != null ? "count=" + transactions.length : "count=0";
+            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                    dataMsUrl + "/api/pos/data",
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<>() {}
+            );
+            List<Map<String, Object>> body = response.getBody();
+            return body != null ? body : Collections.emptyList();
         } catch (Exception e) {
-            return "data-ms no disponible: " + e.getMessage();
+            return Collections.emptyList();
         }
     }
 }

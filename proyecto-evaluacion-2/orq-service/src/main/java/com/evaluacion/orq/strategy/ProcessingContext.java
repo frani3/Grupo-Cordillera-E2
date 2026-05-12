@@ -7,9 +7,6 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-// PATRÓN STRATEGY: Justificación técnica para evaluación parcial 2
-// Context que mantiene la referencia a la estrategia activa.
-// Permite cambiar el algoritmo en runtime sin tocar el cliente.
 @Service
 public class ProcessingContext {
 
@@ -19,7 +16,6 @@ public class ProcessingContext {
     public ProcessingContext(List<ProcessingStrategy> strategyList) {
         this.strategies = strategyList.stream()
                 .collect(Collectors.toMap(ProcessingStrategy::getName, Function.identity()));
-        // Estrategia por defecto
         this.currentStrategy = strategies.get("batch");
     }
 
@@ -32,8 +28,8 @@ public class ProcessingContext {
         this.currentStrategy = strategy;
     }
 
-    public String executeStrategy(String requestId, Object rawData) {
-        return currentStrategy.process(requestId, rawData);
+    public String executeStrategy(String requestId, List<Map<String, Object>> transactions) {
+        return currentStrategy.process(requestId, transactions);
     }
 
     public String getCurrentStrategyName() {
