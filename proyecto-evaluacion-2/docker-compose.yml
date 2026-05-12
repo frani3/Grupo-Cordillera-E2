@@ -1,54 +1,153 @@
 version: '3.8'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Red interna — todos los servicios se comunican por nombre de contenedor
+# ─────────────────────────────────────────────────────────────────────────────
+networks:
+  cordillera-net:
+    driver: bridge
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Volúmenes persistentes
+# ─────────────────────────────────────────────────────────────────────────────
+volumes:
+  mysql-data:
+
 services:
+
+  # ── Infraestructura ─────────────────────────────────────────────────────────
+
   mysql:
     image: mysql:8.0
     container_name: mysql-db
+    networks:
+      - cordillera-net
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: cordillera_pos
     ports:
       - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq-broker
+    networks:
+      - cordillera-net
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
     ports:
       - "5672:5672"
-      - "15672:15672"
+      - "15672:15672"    # Management UI
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 20s
+
+  # ── data-ms (ms1-pos-processor) ─────────────────────────────────────────────
+  # Patrón: Singleton (pool de conexiones)
+  # Puerto interno: 8081
 
   ms1-pos:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: ms1-pos-app
+    networks:
+      - cordillera-net
     ports:
       - "8081:8081"
     environment:
-      - SERVER_PORT=8081
-      - DB_HOST=mysql
-      - DB_PORT=3306
-      - DB_NAME=cordillera_pos
-      - DB_USER=root
-      - DB_PASSWORD=root
-      - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_PORT=5672
-      - RABBITMQ_USER=guest
-      - RABBITMQ_PASSWORD=guest
-      - RABBITMQ_QUEUE_POS=q.pos.deviamserver
-      - ORQUESTADOR_URL=http://orquestador-dummy:8080/api/v1/pos
+      SERVER_PORT: 8081
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: cordillera_pos
+      DB_USER: root
+      DB_PASSWORD: root
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      RABBITMQ_QUEUE_POS: q.pos.deviamserver
+      # URL del orq-service (modelo PUSH legado / circuit-breaker)
+      ORQUESTADOR_URL: http://orq-service:8080/api/v1/pos
     depends_on:
       mysql:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+    restart: on-failure
+
+  # ── orq-service ─────────────────────────────────────────────────────────────
+  # Patrón: Strategy (algoritmos de procesamiento intercambiables)
+  # Puerto interno: 8080  →  host: 8082
+
+  orq-service:
+    build:
+      context: ./orq-service
+      dockerfile: Dockerfile
+    container_name: orq-service-app
+    networks:
+      - cordillera-net
+    ports:
+      - "8082:8080"
+    environment:
+      SERVER_PORT: 8080
+      # URL del data-ms — modelo PULL
+      DATA_MS_URL: http://ms1-pos:8081
+    depends_on:
+      - ms1-pos
+    restart: on-failure
+
+  # ── bff-service ─────────────────────────────────────────────────────────────
+  # Patrón: Proxy (seguridad Bearer + auditoría + manejo de errores)
+  # Puerto interno: 8080  →  host: 8080
+
+  bff-service:
+    build:
+      context: ./bff-service
+      dockerfile: Dockerfile
+    container_name: bff-service-app
+    networks:
+      - cordillera-net
+    ports:
+      - "8080:8080"
+    environment:
+      SERVER_PORT: 8080
+      # URL del orq-service dentro de la red Docker
+      ORQ_SERVICE_URL: http://orq-service:8080
+    depends_on:
+      - orq-service
+    restart: on-failure
+
+  # ── frontend-app ─────────────────────────────────────────────────────────────
+  # Patrón: Factory Method (instancia clientes HTTP según entorno)
+  # Puerto interno: 3000  →  host: 3000
+
+  frontend-app:
+    build:
+      context: ./frontend-app
+      dockerfile: Dockerfile
+    container_name: frontend-app
+    networks:
+      - cordillera-net
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      # URL del bff-service dentro de la red Docker
+      BFF_URL: http://bff-service:8080
+    depends_on:
+      - bff-service
+    restart: on-failure
