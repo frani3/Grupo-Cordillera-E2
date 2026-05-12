@@ -1,6 +1,7 @@
 package com.evaluacion.bff.proxy;
 
 import com.evaluacion.bff.model.DataResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -28,6 +29,7 @@ public class ServiceProxy implements IOrqService {
     private final IOrqService realSubject;
 
     // Constructor usado por Spring — ORQ_SERVICE_URL se inyecta desde application.properties
+    @Autowired
     public ServiceProxy(
             RestTemplate restTemplate,
             @Value("${orq.service.url}") String serviceUrl) {
