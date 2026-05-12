@@ -1,92 +1,33 @@
-# ============================================================
-# .gitignore — Java/Maven + Node.js + IDE/OS
-# ============================================================
-
-# ─── Java / Maven ───────────────────────────────────────────
-# Directorio de salida de compilación (clases, JARs, WARs)
+HELP.md
 target/
-*.class
-*.jar
-*.war
-*.ear
-*.nar
-
-# Archivos de crash de la JVM
-hs_err_pid*
-replay_pid*
-
-# Maven wrapper (solo ignorar el jar, no los scripts)
 .mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
 
-# Reportes de cobertura generados por JaCoCo
-# (se regeneran con: mvn test)
-**/target/site/
-
-# ─── Node.js / NPM ──────────────────────────────────────────
-# Dependencias instaladas localmente (se reinstalan con: npm install)
-node_modules/
-
-# Logs de npm/yarn
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
-.pnpm-debug.log*
-
-# Directorio de build del frontend
-dist/
-build/
-out/
-
-# Directorio de cobertura generado por Jest / Istanbul
-coverage/
-.nyc_output/
-
-# Variables de entorno — NUNCA subir al repo
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# ─── IDEs ───────────────────────────────────────────────────
-# IntelliJ IDEA
-.idea/
-*.iml
-*.iws
-*.ipr
-out/
-
-# Eclipse
+### STS ###
+.apt_generated
 .classpath
-.project
-.settings/
 .factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
 
-# VS Code
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
 .vscode/
-
-# NetBeans
-nbproject/
-nbactions.xml
-
-# ─── Sistema Operativo ──────────────────────────────────────
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-
-# Windows
-Thumbs.db
-Thumbs.db:encryptable
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
-
-# ─── Misceláneos ────────────────────────────────────────────
-*.log
-*.tmp
-*.bak
-*.swp
-*.swo
-*~

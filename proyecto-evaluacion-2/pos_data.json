@@ -1,0 +1,39 @@
+[
+  {
+    "trx_id": "POS-98213",
+    "sucursal": "Providencia",
+    "caja_id": "CAJA-03",
+    "fecha_hora": "2026-04-28T10:15:30Z",
+    "monto_total": 45990,
+    "metodo_pago": "Tarjeta de Crédito",
+    "vendedor_id": "EMP-102",
+    "productos": [
+      {
+        "sku": "CRD-1001",
+        "cantidad": 1,
+        "precio_unitario": 20000
+      },
+      {
+        "sku": "CRD-2054",
+        "cantidad": 2,
+        "precio_unitario": 12995
+      }
+    ]
+  },
+  {
+    "trx_id": "POS-98214",
+    "sucursal": "Las Condes",
+    "caja_id": "CAJA-01",
+    "fecha_hora": "2026-04-28T10:45:12Z",
+    "monto_total": 15000,
+    "metodo_pago": "Efectivo",
+    "vendedor_id": "EMP-088",
+    "productos": [
+      {
+        "sku": "CRD-3301",
+        "cantidad": 1,
+        "precio_unitario": 15000
+      }
+    ]
+  }
+]
