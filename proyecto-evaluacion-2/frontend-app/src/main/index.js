@@ -6,35 +6,53 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
+// Crea facade pasando el fetcher con el header Authorization del request entrante
+// Node 18 tiene fetch nativo (globalThis.fetch) — sin dependencias extra
+function buildFacade(authToken) {
+  const env = process.env.NODE_ENV === "production" ? "production" : "development";
+
+  const authedFetch = (url, options = {}) =>
+    fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        Authorization: authToken || "Bearer demo-token",
+      },
+    });
+
+  return new DataFacade(env, authedFetch);
+}
+
 // Health check
 app.get("/health", (req, res) => {
   res.json({ status: "ok", service: "frontend-app", port: PORT });
 });
 
-// Proxy hacia el BFF — el frontend-app actúa de intermediario para el navegador
+// GET /api/user/:id  →  BFF /api/proxy/data?id=user-{id}
 app.get("/api/user/:id", async (req, res) => {
-  const env = process.env.NODE_ENV === "production" ? "production" : "development";
-  const facade = new DataFacade(env);
+  const facade = buildFacade(req.headers.authorization);
   try {
     const data = await facade.getUserData(req.params.id);
     res.json(data);
   } catch (err) {
-    res.status(502).json({ error: err.message });
+    const status = err.message.includes("401") ? 401 : 502;
+    res.status(status).json({ error: err.message });
   }
 });
 
+// GET /api/dashboard  →  BFF /api/proxy/data?id=dashboard
 app.get("/api/dashboard", async (req, res) => {
-  const env = process.env.NODE_ENV === "production" ? "production" : "development";
-  const facade = new DataFacade(env);
+  const facade = buildFacade(req.headers.authorization);
   try {
     const data = await facade.getDashboardData();
     res.json(data);
   } catch (err) {
-    res.status(502).json({ error: err.message });
+    const status = err.message.includes("401") ? 401 : 502;
+    res.status(status).json({ error: err.message });
   }
 });
 
-// Sirve página principal
+// Página principal con instrucciones de uso
 app.get("/", (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -42,16 +60,23 @@ app.get("/", (req, res) => {
     <head>
       <meta charset="UTF-8">
       <title>Grupo Cordillera — Frontend</title>
-      <style>body{font-family:sans-serif;max-width:800px;margin:40px auto;padding:0 20px}</style>
+      <style>
+        body { font-family: sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }
+        code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
+        pre  { background: #f4f4f4; padding: 12px; border-radius: 5px; overflow-x: auto; }
+      </style>
     </head>
     <body>
       <h1>Frontend App — Grupo Cordillera</h1>
-      <p>Servicio corriendo en puerto <strong>${PORT}</strong></p>
-      <ul>
-        <li><a href="/health">GET /health</a></li>
-        <li><a href="/api/dashboard">GET /api/dashboard</a></li>
-        <li><a href="/api/user/1">GET /api/user/1</a></li>
-      </ul>
+      <p>Puerto: <strong>${PORT}</strong> | BFF: <strong>${process.env.BFF_URL || "http://bff-service:8080"}</strong></p>
+      <h2>Endpoints disponibles</h2>
+      <pre>
+GET  /health                     — Estado del frontend
+GET  /api/dashboard              — Datos del dashboard (requiere Authorization: Bearer)
+GET  /api/user/:id               — Datos de usuario (requiere Authorization: Bearer)
+      </pre>
+      <h2>Ejemplo de uso</h2>
+      <pre>curl http://localhost:3000/api/dashboard -H "Authorization: Bearer mi-token"</pre>
     </body>
     </html>
   `);
@@ -59,7 +84,7 @@ app.get("/", (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`frontend-app escuchando en puerto ${PORT}`);
-  console.log(`BFF_URL configurada: ${process.env.BFF_URL || "(no definida, se usará default del ambiente)"}`);
+  console.log(`BFF_URL: ${process.env.BFF_URL || "http://bff-service:8080"}`);
 });
 
 module.exports = app;
