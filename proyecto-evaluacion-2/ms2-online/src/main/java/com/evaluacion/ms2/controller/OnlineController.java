@@ -29,10 +29,8 @@ public class OnlineController {
     }
 
     @GetMapping("/ventas")
-    public ResponseEntity<List<OnlineVenta>> obtenerVentas(
-            @RequestParam(defaultValue = "7") int dias) {
-        List<OnlineVenta> ventas = service.obtenerUltimosDias(dias);
-        return ResponseEntity.ok(ventas);
+    public ResponseEntity<List<OnlineVenta>> obtenerVentas() {
+        return ResponseEntity.ok(service.obtenerTodas());
     }
 
     @GetMapping("/health")

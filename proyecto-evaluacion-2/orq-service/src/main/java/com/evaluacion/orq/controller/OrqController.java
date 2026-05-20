@@ -47,7 +47,7 @@ public class OrqController {
                     CompletableFuture.supplyAsync(() -> fetchFromMs("/api/pos/data", dataMsUrl, "pos"));
 
             CompletableFuture<List<Map<String, Object>>> futureMs2 =
-                    CompletableFuture.supplyAsync(() -> fetchFromMs("/api/online/ventas?dias=7", dataMs2Url, "online"));
+                    CompletableFuture.supplyAsync(() -> fetchFromMs("/api/online/ventas", dataMs2Url, "online"));
 
             List<Map<String, Object>> transactions = Stream.concat(
                     futureMs1.join().stream(),
