@@ -92,6 +92,27 @@ services:
   # Patrón: Strategy (algoritmos de procesamiento intercambiables)
   # Puerto interno: 8080  →  host: 8082
 
+  # ── ms2-online ──────────────────────────────────────────────────────────────
+  # Patron: Singleton (in-memory store de ventas online)
+  # Puerto interno: 8083  ->  host: 8083
+
+  ms2-online:
+    build:
+      context: ./ms2-online
+      dockerfile: Dockerfile
+    container_name: ms2-online-app
+    networks:
+      - cordillera-net
+    ports:
+      - "8083:8083"
+    environment:
+      SERVER_PORT: 8083
+    restart: on-failure
+
+  # ── orq-service ─────────────────────────────────────────────────────────────
+  # Patron: Strategy (algoritmos de procesamiento intercambiables)
+  # Puerto interno: 8080  ->  host: 8082
+
   orq-service:
     build:
       context: ./orq-service
@@ -103,10 +124,12 @@ services:
       - "8082:8080"
     environment:
       SERVER_PORT: 8080
-      # URL del data-ms — modelo PULL
+      # URL del data-ms (MS1) y ms2-online — modelo PULL paralelo
       DATA_MS_URL: http://ms1-pos:8081
+      DATA_MS2_URL: http://ms2-online:8083
     depends_on:
       - ms1-pos
+      - ms2-online
     restart: on-failure
 
   # ── bff-service ─────────────────────────────────────────────────────────────
