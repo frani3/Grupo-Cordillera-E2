@@ -7,6 +7,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Instant;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 // PATRÓN PROXY: Justificación técnica para evaluación parcial 2
 //
@@ -56,6 +59,20 @@ public class ServiceProxy implements IOrqService {
 
         auditLog("RESPONSE", requestId, response.status());
         return response;
+    }
+
+    @Override
+    public List<Map<String, Object>> fetchVentas(String authToken) {
+        validateBearerToken(authToken);
+        auditLog("REQUEST", "ventas", authToken);
+        try {
+            List<Map<String, Object>> ventas = realSubject.fetchVentas(authToken);
+            auditLog("RESPONSE", "ventas", ventas.size() + " registros");
+            return ventas;
+        } catch (Exception e) {
+            auditLog("ERROR", "ventas", e.getMessage());
+            return Collections.emptyList();
+        }
     }
 
     private void validateBearerToken(String authToken) {

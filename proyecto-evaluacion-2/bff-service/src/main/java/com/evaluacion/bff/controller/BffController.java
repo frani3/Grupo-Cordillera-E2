@@ -6,6 +6,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+import java.util.Map;
+
 // PATRÓN PROXY: Justificación técnica para evaluación parcial 2
 // Client en la estructura del patrón. Solo conoce ServiceProxy;
 // no sabe si habla con el servicio real o un intermediario.
@@ -31,6 +34,18 @@ public class BffController {
         } catch (SecurityException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(DataResponse.error(e.getMessage()));
+        }
+    }
+
+    // GET /api/proxy/ventas — lista consolidada de MS1 + MS2 (requiere Bearer token)
+    @GetMapping("/ventas")
+    public ResponseEntity<List<Map<String, Object>>> getVentas(
+            @RequestHeader(value = "Authorization", required = false) String authToken) {
+        try {
+            List<Map<String, Object>> ventas = serviceProxy.fetchVentas(authToken);
+            return ResponseEntity.ok(ventas);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
     }
 

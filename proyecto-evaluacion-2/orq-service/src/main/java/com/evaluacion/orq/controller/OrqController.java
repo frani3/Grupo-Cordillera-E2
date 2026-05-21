@@ -65,6 +65,22 @@ public class OrqController {
         }
     }
 
+    // GET /api/ventas — lista consolidada cruda de MS1 + MS2 (sin aplicar Strategy)
+    @GetMapping("/ventas")
+    public ResponseEntity<List<Map<String, Object>>> getVentas() {
+        CompletableFuture<List<Map<String, Object>>> futureMs1 =
+                CompletableFuture.supplyAsync(() -> fetchFromMs("/api/pos/data", dataMsUrl, "pos"));
+        CompletableFuture<List<Map<String, Object>>> futureMs2 =
+                CompletableFuture.supplyAsync(() -> fetchFromMs("/api/online/ventas", dataMs2Url, "online"));
+
+        List<Map<String, Object>> ventas = Stream.concat(
+                futureMs1.join().stream(),
+                futureMs2.join().stream()
+        ).collect(Collectors.toList());
+
+        return ResponseEntity.ok(ventas);
+    }
+
     // POST /api/v1/pos — recibe notificaciones push del data-ms (modelo PUSH legado)
     @PostMapping("/v1/pos")
     public ResponseEntity<String> receivePos(@RequestBody Object payload) {
