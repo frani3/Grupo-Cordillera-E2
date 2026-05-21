@@ -22,24 +22,20 @@ GitHub Flow es una estrategia de branching minimalista centrada en una única ra
 ```
 main  (protegida — siempre estable)
  │
- ├── feature/frontend-bff    ← Integrante 1
- │       frontend-app/  +  bff-service/
- │
- ├── feature/orq-service     ← Integrante 2
- │       orq-service/
- │
- └── feature/data-ms         ← Integrante 3
-         data-ms/
+ └── rama-merge  ← rama de integracion activa
+         frontend-app/  +  bff-service/
+         orq-service/
+         ms1-pos/
+         ms2-online/
+         docker-compose.yml
 ```
 
-### Descripción de cada rama
+### Descripcion de cada rama
 
-| Rama | Responsable | Componentes | Patrón |
-|------|-------------|-------------|--------|
-| `main` | Todo el equipo | Documentación base | — |
-| `feature/frontend-bff` | Integrante 1 | `frontend-app/` + `bff-service/` | Factory + Proxy |
-| `feature/orq-service` | Integrante 2 | `orq-service/` | Strategy |
-| `feature/data-ms` | Integrante 3 | `data-ms/` | Singleton |
+| Rama | Estado | Componentes | Patrones |
+|------|--------|-------------|--------|
+| `main` | Estable | Documentacion base | — |
+| `rama-merge` | Activa (desarrollo EP2) | Todos los microservicios | Factory + Proxy + Strategy + Singleton x2 |
 
 ---
 
@@ -224,23 +220,31 @@ Después del Squash en main:
 ## Diagrama del Flujo Completo
 
 ```
-                     Pull Request          Pull Request
-main ─────────────────────────────────────────────────────► (stable)
-  │           ▲  Squash Merge    ▲  Squash Merge    ▲
-  │           │                  │                  │
-  ├─► feature/frontend-bff ──────┘                  │
-  │     commit 1: factory                            │
-  │     commit 2: proxy                              │
-  │     commit 3: tests                              │
-  │                                                  │
-  ├─► feature/orq-service ──────────────────────────┘
-  │     commit 1: strategy
-  │     commit 2: tests
-  │
-  └─► feature/data-ms ────────────────────────────────► (en progreso)
-        commit 1: singleton
-        commit 2: tests
+main ──────────────────────────────────────────────► (stable)
+  │                                        ▲
+  │                              Pull Request (pendiente)
+  │                                        │
+  └─► rama-merge ──────────────────────────┘
+        feat: docker-compose + env vars
+        feat: ms1-pos movido a su carpeta
+        feat: ms2-online ventas online (Singleton)
+        feat: orq consolida MS1+MS2 en paralelo
+        chore: limpieza de archivos no usados
+        refactor: filtrado en orq, MS solo almacenan
 ```
+
+## Estado actual del proyecto (EP2)
+
+| Componente | Carpeta | Puerto | Estado |
+|---|---|---|---|
+| Ventas POS | `ms1-pos/` | 8081 | Completo |
+| Ventas Online | `ms2-online/` | 8083 | Completo |
+| Orquestador | `orq-service/` | 8082 | Completo |
+| BFF | `bff-service/` | 8080 | Completo |
+| Frontend | `frontend-app/` | 3000 | Completo |
+| Infraestructura | `docker-compose.yml` | — | Completo |
+| Simulador POS | `simulador-pos.ps1` | — | Completo |
+| Simulador Online | `simulador-online.ps1` | — | Completo |
 
 ---
 

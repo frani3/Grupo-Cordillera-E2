@@ -5,27 +5,41 @@
 
 ## Contexto del Sistema
 
-El sistema implementa una arquitectura de microservicios en cuatro capas. Cada capa tiene una responsabilidad delimitada y adopta un patrón de diseño GoF que resuelve un problema arquitectónico concreto, no como elección arbitraria, sino como respuesta a requisitos reales del cliente:
+El sistema implementa una arquitectura de microservicios en cinco capas. Cada capa tiene una responsabilidad delimitada y adopta un patrón de diseño GoF que resuelve un problema arquitectónico concreto, no como elección arbitraria, sino como respuesta a requisitos reales del cliente:
 
 > *"El sistema debe soportar múltiples entornos, garantizar la seguridad entre capas, ser mantenible por un equipo distribuido y escalar sin reescribir código existente."*
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│   frontend-app  (Node.js)  — Patrón FACTORY METHOD  │
+│   frontend-app  (Node.js)  — Patron FACTORY METHOD  │
 └────────────────────────┬────────────────────────────┘
                          │ HTTP / JSON
 ┌────────────────────────▼────────────────────────────┐
-│   bff-service   (Spring Boot) — Patrón PROXY        │
+│   bff-service   (Spring Boot) — Patron PROXY        │
 └────────────────────────┬────────────────────────────┘
                          │ HTTP / JSON (red interna)
 ┌────────────────────────▼────────────────────────────┐
-│   orq-service   (Spring Boot) — Patrón STRATEGY     │
-└────────────────────────┬────────────────────────────┘
-                         │ JDBC
-┌────────────────────────▼────────────────────────────┐
-│   data-ms       (Spring Boot) — Patrón SINGLETON    │
-└─────────────────────────────────────────────────────┘
+│   orq-service   (Spring Boot) — Patron STRATEGY     │
+│   (llama a MS1 y MS2 en paralelo — CompletableFuture)│
+└──────────────┬─────────────────┬───────────────────┘
+               │ HTTP            │ HTTP
+┌──────────────▼──────┐  ┌───────▼─────────────────┐
+│  ms1-pos            │  │  ms2-online              │
+│  (Spring Boot)      │  │  (Spring Boot)           │
+│  Patron SINGLETON   │  │  Patron SINGLETON        │
+│  Ventas POS         │  │  Ventas Online           │
+│  Puerto :8081       │  │  Puerto :8083            │
+└─────────────────────┘  └──────────────────────────┘
 ```
+
+**Responsabilidades por capa:**
+
+| Capa | Responsabilidad |
+|---|---|
+| MS1 / MS2 | Recibir datos, validarlos, limpiarlos y almacenarlos. Sin logica de negocio. |
+| orq-service | Consultar ambos MS en paralelo, consolidar y aplicar la estrategia de procesamiento |
+| bff-service | Validar token Bearer, auditar y delegar al orq |
+| frontend-app | Crear el cliente HTTP segun el entorno y consumir el BFF |
 
 ---
 
@@ -270,63 +284,87 @@ Template Method define el esqueleto de un algoritmo y permite que las subclases 
 
 ---
 
-## 4. Data MS — Patrón Singleton
+## 4. MS1-pos y MS2-online — Patrón Singleton
 
 ### Categoría GoF
 Creacional.
 
+### Descripción de los microservicios
+
+El sistema cuenta con **dos microservicios de datos**, cada uno con su propio dominio y repositorio en memoria:
+
+| Microservicio | Puerto | Dominio | Endpoint entrada | Endpoint consulta |
+|---|---|---|---|---|
+| `ms1-pos` | 8081 | Ventas en tienda física | `POST /api/pos/simulate-mq` | `GET /api/pos/data` |
+| `ms2-online` | 8083 | Ventas canal online | `POST /api/online/venta` | `GET /api/online/ventas` |
+
+Ambos microservicios tienen la **misma responsabilidad**: recibir datos, validarlos, limpiarlos y almacenarlos. No aplican filtros ni lógica de negocio — esa responsabilidad recae en el orq-service.
+
 ### El Problema sin el Patrón
 
-El microservicio de datos necesita un pool de conexiones a la base de datos. Sin Singleton:
+Cada solicitud concurrente crea una nueva instancia del repositorio, generando múltiples listas independientes y pérdida de datos:
 
 ```java
 // CÓDIGO FRÁGIL sin Singleton:
-class UserRepository {
-  public String findById(int id) {
-    // Cada llamada crea una nueva instancia del gestor
-    DatabaseConnectionManager mgr = new DatabaseConnectionManager();
-    // → Con 100 solicitudes concurrentes = 100 instancias del pool
-    // → Agotamiento de conexiones disponibles en la base de datos
-    // → Inconsistencias de estado entre instancias
-    // → Overhead de memoria proporcional a la carga
+class VentaRepository {
+  public void save(Venta v) {
+    List<Venta> db = new ArrayList<>();  // Nueva lista en cada llamada
+    db.add(v);
+    // → Con 100 solicitudes concurrentes = 100 listas separadas
+    // → GET /ventas devuelve 0 registros porque cada lista es local
+    // → Inconsistencia total de estado
   }
 }
 ```
 
 ### La Solución con Singleton (Holder Pattern)
 
-```java
-// PATRÓN SINGLETON: Justificación técnica para evaluación parcial 2
-//
-// Initialization-on-Demand Holder: thread-safe sin synchronized en el camino feliz.
-// La JVM garantiza que la inicialización estática de clases es atómica.
-public class DatabaseConnectionManager {
-    private DatabaseConnectionManager() {}           // Constructor privado
+Ambos microservicios implementan el mismo patrón — aquí el ejemplo de MS2:
 
-    private static class Holder {                    // Carga diferida
-        static final DatabaseConnectionManager INSTANCE = new DatabaseConnectionManager();
+```java
+// PATRON SINGLETON — Holder Pattern: thread-safe sin synchronized
+@Repository
+public class OnlineVentaRepository {
+
+    protected OnlineVentaRepository() {}  // Constructor protegido
+
+    private static class DatabaseHolder {
+        // La JVM garantiza que esta inicializacion es atomica
+        static final List<OnlineVenta> INSTANCE = new CopyOnWriteArrayList<>();
     }
 
-    public static DatabaseConnectionManager getInstance() {
-        return Holder.INSTANCE;                      // Thread-safe, sin locks
+    public static List<OnlineVenta> getDatabase() {
+        return DatabaseHolder.INSTANCE;   // Siempre la misma lista
+    }
+
+    public OnlineVenta save(OnlineVenta venta) {
+        if (venta.getId() == null) {
+            venta.setId((long) (getDatabase().size() + 1));
+        }
+        getDatabase().add(venta);
+        return venta;
     }
 }
 ```
 
+MS1 implementa el mismo patrón en `PosTransactionRepository` con `CopyOnWriteArrayList<PosTransaction>`.
+
 ### Por qué el Holder Pattern es superior a otras implementaciones de Singleton
 
-| Implementación | Thread-safe | Lazy init | Overhead |
-|---------------|-------------|-----------|----------|
-| Campo estático simple | No (race condition) | No | Ninguno |
-| `synchronized getInstance()` | Sí | Sí | Alto (lock en cada llamada) |
-| Double-checked locking | Sí (con `volatile`) | Sí | Bajo (lock solo primera vez) |
-| **Holder Pattern** (elegido) | **Sí (por la JVM)** | **Sí** | **Ninguno** |
+| Implementacion | Thread-safe | Lazy init | Overhead |
+|---|---|---|---|
+| Campo estatico simple | No (race condition) | No | Ninguno |
+| `synchronized getInstance()` | Si | Si | Alto (lock en cada llamada) |
+| Double-checked locking | Si (con `volatile`) | Si | Bajo (lock solo primera vez) |
+| **Holder Pattern** (elegido) | **Si (por la JVM)** | **Si** | **Ninguno** |
+
+`CopyOnWriteArrayList` se elige sobre `ArrayList` porque permite lecturas concurrentes sin bloqueo, apropiado para un GET que puede ejecutarse mientras el simulador escribe.
 
 ### Por qué mejora la Mantenibilidad y Seguridad
 
-- **Control de recursos:** Un único pool de conexiones es más eficiente que múltiples instancias compitiendo. Las conexiones de base de datos son recursos limitados y costosos.
-- **Consistencia:** La configuración (URL, credenciales, pool size) es compartida y coherente entre todos los repositorios del microservicio.
-- **Thread safety garantizada por la JVM:** No requiere locks explícitos ni anotaciones especiales; la especificación del lenguaje garantiza que la inicialización estática de clases es atómica.
+- **Una sola fuente de verdad:** Todos los threads del microservicio comparten la misma lista. Un POST de `simulador-pos.ps1` y un GET del orq-service leen exactamente los mismos datos.
+- **Thread safety garantizada por la JVM:** No requiere locks explícitos; la especificación del lenguaje garantiza que la inicialización estática de clases es atómica.
+- **Separación de dominios:** MS1 y MS2 tienen repositorios Singleton independientes. El orq los consulta en paralelo y consolida, evitando que un dominio afecte al otro.
 
 ### Alternativa Descartada: Spring IoC Bean Singleton
 
@@ -336,12 +374,13 @@ Spring Boot gestiona beans como Singleton por defecto mediante `@Scope("singleto
 
 ## Tabla Resumen para Defensa Oral
 
-| Componente | Patrón | Categoría GoF | Problema del Cliente | Principios SOLID | Alternativa Descartada |
+| Componente | Patron | Categoria GoF | Problema del Cliente | Principios SOLID | Alternativa Descartada |
 |---|---|---|---|---|---|
 | `frontend-app` | Factory Method | Creacional | Instanciar clientes HTTP por entorno sin acoplamiento | OCP, DIP, SRP | Abstract Factory (YAGNI) |
-| `bff-service` | Proxy | Estructural | Centralizar seguridad y auditoría sin contaminar el Controller | SRP, OCP, LSP, DIP | Decorator (no controla acceso) |
-| `orq-service` | Strategy | Comportamiento | Intercambiar algoritmos de procesamiento en runtime | OCP, SRP, DIP | Template Method (herencia estática) |
-| `data-ms` | Singleton | Creacional | Única instancia thread-safe del pool de conexiones | SRP | Spring IoC (acoplamiento al framework) |
+| `bff-service` | Proxy | Estructural | Centralizar seguridad y auditoria sin contaminar el Controller | SRP, OCP, LSP, DIP | Decorator (no controla acceso) |
+| `orq-service` | Strategy | Comportamiento | Intercambiar algoritmos de procesamiento en runtime; consolidar MS1+MS2 en paralelo | OCP, SRP, DIP | Template Method (herencia estatica) |
+| `ms1-pos` | Singleton | Creacional | Unica lista thread-safe de ventas POS en memoria compartida entre todos los threads | SRP | Spring IoC (acoplamiento al framework) |
+| `ms2-online` | Singleton | Creacional | Unica lista thread-safe de ventas online, dominio separado de MS1 | SRP | Spring IoC (acoplamiento al framework) |
 
 ---
 
