@@ -90,7 +90,37 @@ Lista cada transaccion con su metodo de pago (auditoria):
 
 ---
 
-## 6. BFF — sin token (debe dar 401)
+## 6. BFF ventas — sin token (debe dar 401)
+
+```
+GET http://localhost:8080/api/proxy/ventas
+```
+
+Sin header Authorization. El Proxy bloquea el acceso:
+```json
+HTTP 401 Unauthorized
+```
+
+---
+
+## 7. BFF ventas — con token (MS1 + MS2 consolidados)
+
+```
+GET http://localhost:8080/api/proxy/ventas
+Header: Authorization: Bearer token-cordillera
+```
+
+El Proxy valida, el orq llama a MS1 y MS2 en paralelo y devuelve todas las ventas juntas:
+```json
+[
+  { "transactionId": "TRX-POS-0001", "canal": "pos", "montoTotal": 29990.0, ... },
+  { "transactionId": "TRX-ONLINE-0001", "canal": "online", "montoTotal": 149.97, ... }
+]
+```
+
+---
+
+## 8. BFF data — sin token (debe dar 401)
 
 ```
 GET http://localhost:8080/api/proxy/data?id=demo
@@ -103,14 +133,14 @@ HTTP 401 Unauthorized
 
 ---
 
-## 7. BFF — con token (pasa al orq)
+## 9. BFF data — con token (pasa al orq con Strategy)
 
 ```
 GET http://localhost:8080/api/proxy/data?id=demo
 Header: Authorization: Bearer token-cordillera
 ```
 
-El Proxy valida el token y delega al orq. Devuelve los datos procesados.
+El Proxy valida el token y delega al orq con strategy=batch por defecto.
 
 ---
 
