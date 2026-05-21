@@ -60,7 +60,7 @@ services:
 
   ms1-pos:
     build:
-      context: .
+      context: ./ms1-pos
       dockerfile: Dockerfile
     container_name: ms1-pos-app
     networks:
